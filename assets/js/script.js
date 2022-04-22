@@ -10,11 +10,13 @@ var createTask = function(taskText, taskDate, taskList) {
     .addClass("m-1")
     .text(taskText);
 
-  // append span and p element to parent li
+// append span and p element to parent li
   taskLi.append(taskSpan, taskP);
 
+ // check due date
+  auditTask(taskLi);
 
-  // append to ul list on the page
+// append to ul list on the page
   $("#list-" + taskList).append(taskLi);
 };
 
@@ -33,7 +35,6 @@ var loadTasks = function() {
 
   // loop over object properties
   $.each(tasks, function(list, arr) {
-    console.log(list, arr);
     // then loop over sub-array
     arr.forEach(function(task) {
       createTask(task.text, task.date, list);
@@ -43,6 +44,33 @@ var loadTasks = function() {
 
 var saveTasks = function() {
   localStorage.setItem("tasks", JSON.stringify(tasks));
+};
+
+var auditTask = function(taskEl) {
+
+// get date from task element
+  var date = $(taskEl)
+  .find("span")
+  .text()
+  .trim();
+
+console.log(date);
+
+// convert to moment object at 5:00pm
+  var time = moment(date, "L").set("hour", 17);
+
+console.log(time);
+
+// remove any old classes from element
+  $(taskEl).removeClass("list-group-item-warning list-group-item-danger");
+
+// apply new class if task is near/over due date
+  if (moment().isAfter(time)) {
+    $(taskEl).addClass("list-group-item-danger");
+  }
+  else if (Math.abs(moment().diff(time, "days")) <= 2) {
+    $(taskEl).addClass("list-group-item-warning");
+  }
 };
 
 // enable draggable/sortable feature on list-group elements
@@ -68,7 +96,9 @@ $(".card .list-group").sortable({
     var tempArr = [];
 
     // loop over current set of children in sortable list
-      $(this).children().each(function() {
+      $(this)
+      .children()
+      .each(function() {
         tempArr.push({
           text: $(this)
             .find("p")
@@ -78,8 +108,6 @@ $(".card .list-group").sortable({
             .find("span")
             .text()
             .trim()
-       
-      
   });
 });
 
@@ -97,13 +125,12 @@ stop: function(event) {
   $(this).removeClass("dropover");
 }
 });
+
 $("#trash").droppable({
   accept: ".card .list-group-item",
   tolerance: "touch",
   drop: function(event, ui) {
     ui.draggable.remove();
-
-    console.log("drop");
   },
   over: function(event, ui) {
     console.log("over");
@@ -112,6 +139,13 @@ $("#trash").droppable({
     console.log("out");
   }
 });
+
+// convert text field into a jquery date picker
+$("#modalDueDate").datepicker({
+// force user to select a future date
+  minDate: 1
+});
+
 
 // modal was triggered
 $("#task-form-modal").on("show.bs.modal", function() {
@@ -203,15 +237,24 @@ $(".list-group").on("click", "span", function() {
     .val(date);
   $(this).replaceWith(dateInput);
 
+// enable jquery ui datepicker
+dateInput.datepicker({
+  minDate: 1,
+  onClose: function() {
+    // when calendar is closed, force a "change" event on the `dateInput`
+    $(this).trigger("change");
+  }
+  });
+
   // automatically bring up the calendar
   dateInput.trigger("focus");
 });
 
 // value of due date was changed
-$(".list-group").on("blur", "input[type='text']", function() {
+$(".list-group").on("change", "input[type='text']", function() {
   var date = $(this).val();
 
-  // get status type and position in the list
+// get status type and position in the list
   var status = $(this)
     .closest(".list-group")
     .attr("id")
@@ -220,15 +263,17 @@ $(".list-group").on("blur", "input[type='text']", function() {
     .closest(".list-group-item")
     .index();
 
-  // update task in array and re-save to localstorage
+// update task in array and re-save to localstorage
   tasks[status][index].date = date;
   saveTasks();
 
-  // recreate span and insert in place of input element
+// recreate span and insert in place of input element
   var taskSpan = $("<span>")
     .addClass("badge badge-primary badge-pill")
     .text(date);
     $(this).replaceWith(taskSpan);
+// Pass task's <li> element into auditTask() to check new due date
+  auditTask($(taskSpan).closest(".list-group-item"));
 });
 
 // remove all tasks
@@ -237,6 +282,7 @@ $("#remove-tasks").on("click", function() {
     tasks[key].length = 0;
     $("#list-" + key).empty();
   }
+  console.log(tasks);
   saveTasks();
 });
 
